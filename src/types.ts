@@ -24,6 +24,12 @@ export const GRADE_CONTROLS: GradeControl[] = [
   { key: 'warmth', label: 'Warmth', min: -100, max: 100 },
 ]
 
+export interface Preset {
+  id: string
+  name: string
+  grade: Grade
+}
+
 export interface Clip {
   id: string
   name: string

@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { NEUTRAL_GRADE } from './types'
 import type { Clip, Grade, GradeKey } from './types'
 import { Viewer } from './components/Viewer'
 import { GradePanel } from './components/GradePanel'
+import { PresetPanel } from './components/PresetPanel'
+import { lerpGrade } from './lib/presets'
+
+const TWEEN_MS = 280
 
 // Blender Foundation open movies (CC BY), self-hosted in public/clips
 const CLIPS: Clip[] = [
@@ -18,7 +22,35 @@ export default function App() {
 
   const clip = clips.find((c) => c.id === clipId) ?? clips[0]
 
-  const updateGrade = (key: GradeKey, value: number) => setGrade((g) => ({ ...g, [key]: value }))
+  const tweenRef = useRef<number | null>(null)
+
+  const stopTween = () => {
+    if (tweenRef.current !== null) cancelAnimationFrame(tweenRef.current)
+    tweenRef.current = null
+  }
+
+  const updateGrade = (key: GradeKey, value: number) => {
+    stopTween() // grabbing a slider cancels any running preset animation
+    setGrade((g) => ({ ...g, [key]: value }))
+  }
+
+  // Glide the sliders to a preset instead of jumping, so you see the look being built
+  const applyPreset = (target: Grade) => {
+    stopTween()
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setGrade(target)
+      return
+    }
+    const from = grade
+    const start = performance.now()
+    const frame = (now: number) => {
+      const t = Math.min(1, (now - start) / TWEEN_MS)
+      const eased = 1 - (1 - t) ** 3 // ease-out cubic
+      setGrade(lerpGrade(from, target, eased))
+      tweenRef.current = t < 1 ? requestAnimationFrame(frame) : null
+    }
+    tweenRef.current = requestAnimationFrame(frame)
+  }
 
   // A local file never leaves the browser: it plays from an in-memory object URL
   const openLocalFile = (file: File) => {
@@ -71,7 +103,8 @@ export default function App() {
         {/* key = fresh player state for every clip */}
         <Viewer key={clip.src} src={clip.src} grade={grade} bypass={compare} />
         <aside className="sidebar">
-          <GradePanel grade={grade} onChange={updateGrade} onReset={() => setGrade(NEUTRAL_GRADE)} />
+          <PresetPanel grade={grade} onApply={applyPreset} />
+          <GradePanel grade={grade} onChange={updateGrade} onReset={() => applyPreset(NEUTRAL_GRADE)} />
         </aside>
       </main>
 

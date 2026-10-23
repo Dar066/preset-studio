@@ -184,6 +184,42 @@ button, select, input { font: inherit; color: inherit; }
 }
 .slider input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent); }
 
+/* ---------- Presets ---------- */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px 16px 16px;
+}
+
+.preset {
+  display: grid;
+  gap: 6px;
+  padding: 4px 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.preset:hover { border-color: #3c4248; }
+.preset:active { transform: scale(0.97); }
+.preset:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.preset.is-active { border-color: var(--accent); background: var(--accent-soft); }
+
+/* A tiny "scene" (sky, sun, skin tones, foliage) so each look reads at a glance */
+.preset-swatch {
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 72% 30%, #ffe6a8 0 9%, transparent 10%),
+    linear-gradient(180deg, #6fa3d6 0%, #a9c7e4 38%, #e9b88c 50%, #c46f4e 58%, #4f7d3f 74%, #1f2c1b 100%);
+}
+
+.preset-name { font-size: 12px; }
+
 /* ---------- Narrow screens ---------- */
 @media (max-width: 760px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: auto auto; overflow-y: auto; }
