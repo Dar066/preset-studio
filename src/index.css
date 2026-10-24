@@ -327,3 +327,130 @@ button, select, input { font: inherit; color: inherit; }
   content: ''; position: absolute; top: -2px; left: -4px;
   border: 5px solid transparent; border-top-color: var(--text);
 }
+
+/* ---------- Keyboard shortcuts ---------- */
+.workspace { position: relative; }
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg);
+  font: 500 11px/1 var(--mono);
+  color: var(--text);
+}
+.kbd-group { display: inline-flex; gap: 3px; vertical-align: middle; }
+.kbd-empty { color: var(--text-dim); }
+.topbar-tools .btn-ghost .kbd-group { margin-left: 6px; }
+
+/* HUD that confirms each shortcut */
+.key-hint {
+  position: absolute;
+  left: 50%;
+  top: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(14, 15, 17, 0.88);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: hint-in 0.12s ease-out;
+  white-space: nowrap;
+  z-index: 5;
+}
+@keyframes hint-in { from { opacity: 0; transform: translate(-50%, -4px); } }
+
+/* Shortcuts dialog */
+.shortcuts {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 48px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+.shortcuts::backdrop { background: rgba(0, 0, 0, 0.55); }
+.shortcuts-inner { display: grid; grid-template-rows: auto auto auto 1fr; max-height: inherit; }
+
+.shortcuts-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 16px 20px 12px;
+}
+.shortcuts-head h2 { margin: 0; font-size: 16px; }
+.muted { margin: 4px 0 0; color: var(--text-dim); font-size: 12px; }
+.muted strong { color: var(--text); font-weight: 500; }
+
+.layout-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 20px; }
+.layout-card {
+  display: grid; gap: 2px; text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.layout-card:hover { border-color: #3c4248; }
+.layout-card:active { transform: scale(0.98); }
+.layout-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.layout-card.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.layout-name { font-weight: 600; }
+.layout-desc { font-size: 11px; color: var(--text-dim); }
+
+.shortcuts-status {
+  margin: 12px 20px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 12px;
+  min-height: 34px;
+}
+
+.shortcuts-list {
+  overflow-y: auto;
+  padding: 4px 20px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 24px;
+}
+.shortcut-group h3 {
+  margin: 14px 0 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.shortcut-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 3px 6px; margin: 0 -6px;
+  border-radius: 6px;
+}
+.shortcut-row.is-changed { animation: row-flash 1.6s ease-out; background: rgba(245, 165, 36, 0.07); }
+@keyframes row-flash { 0%, 30% { background: rgba(245, 165, 36, 0.28); } }
+.shortcut-label { font-size: 12.5px; }
+
+.binding {
+  min-width: 64px; height: 28px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  border: 1px solid transparent; border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.binding:hover { border-color: var(--border); background: var(--surface-2); }
+.binding:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.binding.is-capturing { border-color: var(--accent); background: var(--accent-soft); }
+.capture-hint { font-size: 11px; color: var(--accent); white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .layout-picker { grid-template-columns: 1fr; }
+  .shortcuts-list { grid-template-columns: 1fr; }
+}

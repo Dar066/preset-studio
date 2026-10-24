@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Clip, Grade, Transition } from '../types'
+import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import type { Ref } from 'react'
+import { FRAME } from '../types'
+import type { Clip, Grade, PlayerHandle, Transition } from '../types'
 import { gradeToMatrix } from '../lib/colorMatrix'
 import { formatTimecode, layerOpacity, sequenceLayout } from '../lib/transition'
 import type { SequenceLayout } from '../lib/transition'
@@ -11,6 +13,8 @@ interface SequenceViewerProps {
   transition: Transition
   grade: Grade
   bypass: boolean
+  /** lets keyboard shortcuts drive this player */
+  ref?: Ref<PlayerHandle>
 }
 
 const FILTER_ID = 'ps-grade-seq'
@@ -21,7 +25,7 @@ const PREROLL = 1.5 // seconds shown before the transition when previewing it
  * timeline time; both <video> elements are kept in sync with it, and their
  * opacities come from the transition math in lib/transition.ts.
  */
-export function SequenceViewer({ clipA, clipB, transition, grade, bypass }: SequenceViewerProps) {
+export function SequenceViewer({ clipA, clipB, transition, grade, bypass, ref }: SequenceViewerProps) {
   const aRef = useRef<HTMLVideoElement>(null)
   const bRef = useRef<HTMLVideoElement>(null)
   const [durA, setDurA] = useState(0)
@@ -103,7 +107,7 @@ export function SequenceViewer({ clipA, clipB, transition, grade, bypass }: Sequ
     const clamped = Math.min(Math.max(0, t), layoutRef.current.total)
     timeRef.current = clamped
     setTime(clamped)
-    if (playing) {
+    if (rafRef.current !== null) {
       clockRef.current = { startTime: clamped, startPerf: performance.now() }
       syncVideos(clamped, true)
     } else {
@@ -112,6 +116,33 @@ export function SequenceViewer({ clipA, clipB, transition, grade, bypass }: Sequ
   }
 
   const previewTransition = () => play(Math.max(0, layout.bStart - PREROLL))
+
+  /** Edit points = every place a clip starts or ends on the timeline. */
+  const jumpToEdit = (direction: -1 | 1) => {
+    const { bStart, durA, total } = layoutRef.current
+    const points = [...new Set([0, bStart, durA, total])].sort((x, y) => x - y)
+    const t = timeRef.current
+    const target =
+      direction < 0
+        ? [...points].reverse().find((p) => p < t - 0.05) ?? 0
+        : points.find((p) => p > t + 0.05) ?? total
+    seek(target)
+  }
+
+  useImperativeHandle(ref, () => ({
+    togglePlay: () => (rafRef.current !== null ? pause() : play()),
+    play: () => play(),
+    pause,
+    seekBy: (s) => seek(timeRef.current + s),
+    seekTo: seek,
+    stepFrames: (n) => {
+      pause()
+      seek(timeRef.current + n * FRAME)
+    },
+    prevEdit: () => jumpToEdit(-1),
+    nextEdit: () => jumpToEdit(1),
+    previewTransition,
+  }))
 
   // Transition length changed → keep the clock's view of the timeline current
   // and re-show the right frames if paused

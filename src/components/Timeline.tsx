@@ -40,6 +40,7 @@ export function Timeline({ layout, time, labelA, labelB, onSeek }: TimelineProps
         if (e.buttons === 1) seekFromPointer(e)
       }}
       onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault() // focused timeline owns its arrows
         if (e.key === 'ArrowLeft') onSeek(Math.max(0, time - 0.5))
         if (e.key === 'ArrowRight') onSeek(Math.min(total, time + 0.5))
       }}

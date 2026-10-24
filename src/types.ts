@@ -40,6 +40,22 @@ export interface Transition {
 
 export const DEFAULT_TRANSITION: Transition = { type: 'crossfade', duration: 1 }
 
+/** What the keyboard shortcuts can ask either player to do. */
+export interface PlayerHandle {
+  togglePlay: () => void
+  play: () => void
+  pause: () => void
+  seekBy: (seconds: number) => void
+  seekTo: (seconds: number) => void
+  stepFrames: (frames: number) => void
+  prevEdit: () => void
+  nextEdit: () => void
+  /** sequence player only */
+  previewTransition?: () => void
+}
+
+export const FRAME = 1 / 24 // seconds per frame for frame stepping
+
 export interface Clip {
   id: string
   name: string

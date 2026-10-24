@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react'
-import type { Grade } from '../types'
+import { useImperativeHandle, useRef, useState } from 'react'
+import type { Ref } from 'react'
+import { FRAME } from '../types'
+import type { Grade, PlayerHandle } from '../types'
 import { gradeToMatrix } from '../lib/colorMatrix'
 
 interface ViewerProps {
@@ -7,6 +9,8 @@ interface ViewerProps {
   grade: Grade
   /** true = show the original, ungraded frame (compare) */
   bypass: boolean
+  /** lets keyboard shortcuts drive this player */
+  ref?: Ref<PlayerHandle>
 }
 
 const FILTER_ID = 'ps-grade'
@@ -18,7 +22,7 @@ function formatTime(t: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function Viewer({ src, grade, bypass }: ViewerProps) {
+export function Viewer({ src, grade, bypass, ref }: ViewerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
@@ -35,9 +39,25 @@ export function Viewer({ src, grade, bypass }: ViewerProps) {
   const seek = (t: number) => {
     const v = videoRef.current
     if (!v) return
-    v.currentTime = t
-    setTime(t)
+    const clamped = Math.min(Math.max(0, t), v.duration || 0)
+    v.currentTime = clamped
+    setTime(clamped)
   }
+
+  // A single clip has two edit points: its start and its end
+  useImperativeHandle(ref, () => ({
+    togglePlay,
+    play: () => void videoRef.current?.play(),
+    pause: () => videoRef.current?.pause(),
+    seekBy: (s) => seek((videoRef.current?.currentTime ?? 0) + s),
+    seekTo: seek,
+    stepFrames: (n) => {
+      videoRef.current?.pause()
+      seek((videoRef.current?.currentTime ?? 0) + n * FRAME)
+    },
+    prevEdit: () => seek(0),
+    nextEdit: () => seek(Infinity),
+  }))
 
   return (
     <div className="viewer">
