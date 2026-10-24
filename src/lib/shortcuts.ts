@@ -26,6 +26,8 @@ export type ActionId =
   | 'compareHold'
   | 'resetGrade'
   | 'openShortcuts'
+  | 'undo'
+  | 'redo'
 
 export type ActionGroup = 'Playback' | 'Navigate' | 'Edit' | 'View'
 
@@ -51,6 +53,8 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'goEnd', label: 'Go to end', group: 'Navigate' },
   { id: 'prevEdit', label: 'Previous edit point', group: 'Navigate' },
   { id: 'nextEdit', label: 'Next edit point', group: 'Navigate' },
+  { id: 'undo', label: 'Undo', group: 'Edit', repeat: true },
+  { id: 'redo', label: 'Redo', group: 'Edit', repeat: true },
   { id: 'applyTransition', label: 'Apply default transition', group: 'Edit' },
   { id: 'previewTransition', label: 'Preview transition', group: 'Edit' },
   { id: 'resetGrade', label: 'Reset color grade', group: 'Edit' },
@@ -83,6 +87,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   showSequence: '2',
   compareHold: 'C',
   openShortcuts: 'Shift+/',
+  undo: 'Mod+Z', // same in Premiere Pro and Final Cut Pro
+  redo: 'Mod+Shift+Z',
 }
 
 export type LayoutId = 'default' | 'premiere' | 'fcp'

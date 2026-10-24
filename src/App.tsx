@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_TRANSITION, NEUTRAL_GRADE } from './types'
+import { GRADE_CONTROLS } from './types'
 import type { Clip, Grade, GradeKey, PlayerHandle, Transition } from './types'
 import { Viewer } from './components/Viewer'
 import { GradePanel } from './components/GradePanel'
@@ -8,8 +9,10 @@ import { SequenceViewer } from './components/SequenceViewer'
 import { TransitionPanel } from './components/TransitionPanel'
 import { Kbd, ShortcutsPanel } from './components/ShortcutsPanel'
 import type { ShortcutState } from './components/ShortcutsPanel'
-import { lerpGrade } from './lib/presets'
-import { ACTIONS, DEFAULT_BINDINGS, LAYOUTS, actionLabel, assign, importLayout } from './lib/shortcuts'
+import { PRESETS, lerpGrade, matchPreset } from './lib/presets'
+import { emptyHistory, record, redo, undo } from './lib/history'
+import type { History } from './lib/history'
+import { ACTIONS, DEFAULT_BINDINGS, LAYOUTS, actionLabel, assign, formatCombo, importLayout } from './lib/shortcuts'
 import type { ActionId, Bindings, ImportResult, LayoutId } from './lib/shortcuts'
 import { useShortcuts } from './hooks/useShortcuts'
 import type { ShortcutHandlers } from './hooks/useShortcuts'
@@ -17,6 +20,14 @@ import type { ShortcutHandlers } from './hooks/useShortcuts'
 const TWEEN_MS = 280
 
 type Mode = 'clip' | 'sequence'
+
+/** Everything undo/redo covers. View state (mode, playhead, clip) is deliberately not undoable, as in NLEs. */
+interface Doc {
+  grade: Grade
+  transition: Transition
+}
+
+const sameGrade = (a: Grade, b: Grade) => GRADE_CONTROLS.every((c) => a[c.key] === b[c.key])
 
 // Blender Foundation open movies (CC BY), self-hosted in public/clips
 const CLIPS: Clip[] = [
@@ -43,6 +54,12 @@ function loadShortcuts(): ShortcutState {
   }
 }
 
+/** "Undo Brightness (Ctrl+Z)" */
+function historyTitle(verb: string, label: string | undefined, combo: string | null): string {
+  const keys = combo ? ` (${formatCombo(combo).join('+')})` : ''
+  return label ? `${verb} ${label}${keys}` : `Nothing to ${verb.toLowerCase()}`
+}
+
 export default function App() {
   const [clips, setClips] = useState<Clip[]>(CLIPS)
   const [clipId, setClipId] = useState(CLIPS[0].id)
@@ -53,27 +70,68 @@ export default function App() {
   const [shortcuts, setShortcuts] = useState<ShortcutState>(loadShortcuts)
   const [lastImport, setLastImport] = useState<(ImportResult & { layoutId: LayoutId }) | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [hint, setHint] = useState<{ id: ActionId; n: number } | null>(null)
+  const [hint, setHint] = useState<{ id: ActionId; n: number; detail?: string } | null>(null)
+  const [history, setHistory] = useState<History<Doc>>(emptyHistory)
   const playerRef = useRef<PlayerHandle>(null)
   const hintTimer = useRef<number | undefined>(undefined)
 
   const clip = clips.find((c) => c.id === clipId) ?? clips[0]
 
   const tweenRef = useRef<number | null>(null)
+  const tweenTargetRef = useRef<Grade | null>(null)
 
   const stopTween = () => {
     if (tweenRef.current !== null) cancelAnimationFrame(tweenRef.current)
     tweenRef.current = null
   }
 
+  // ---------- Undo / redo ----------
+  /** The document as the user intends it: a preset still animating counts as already applied. */
+  const currentDoc = (): Doc => ({
+    grade: tweenRef.current !== null && tweenTargetRef.current ? tweenTargetRef.current : grade,
+    transition,
+  })
+
+  /** Save an undo point BEFORE a change. Same key + quick succession = same step (one slider drag). */
+  const checkpoint = (label: string, key?: string) => setHistory(record(history, currentDoc(), label, key))
+
+  const restore = (doc: Doc) => {
+    stopTween()
+    tweenTargetRef.current = null
+    setGrade(doc.grade)
+    setTransition(doc.transition)
+  }
+
+  const doUndo = (): string => {
+    const step = undo(history, currentDoc())
+    if (!step) return 'Nothing to undo'
+    restore(step.doc)
+    setHistory(step.history)
+    return step.label
+  }
+
+  const doRedo = (): string => {
+    const step = redo(history, currentDoc())
+    if (!step) return 'Nothing to redo'
+    restore(step.doc)
+    setHistory(step.history)
+    return step.label
+  }
+
   const updateGrade = (key: GradeKey, value: number) => {
+    if (grade[key] === value && tweenRef.current === null) return
+    checkpoint(GRADE_CONTROLS.find((c) => c.key === key)?.label ?? key, `grade:${key}`)
     stopTween() // grabbing a slider cancels any running preset animation
     setGrade((g) => ({ ...g, [key]: value }))
   }
 
   // Glide the sliders to a preset instead of jumping, so you see the look being built
-  const applyPreset = (target: Grade) => {
+  const applyPreset = (target: Grade, label?: string) => {
+    if (!sameGrade(currentDoc().grade, target)) {
+      checkpoint(label ?? `${PRESETS.find((p) => p.id === matchPreset(target))?.name ?? 'Custom'} preset`)
+    }
     stopTween()
+    tweenTargetRef.current = target
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setGrade(target)
       return
@@ -88,6 +146,14 @@ export default function App() {
       tweenRef.current = t < 1 ? requestAnimationFrame(frame) : null
     }
     tweenRef.current = requestAnimationFrame(frame)
+  }
+
+  const changeTransition = (next: Transition, label?: string) => {
+    if (next.type === transition.type && next.duration === transition.duration) return
+    if (label) checkpoint(label)
+    else if (next.type !== transition.type) checkpoint(next.type === 'crossfade' ? 'Crossfade' : 'Dip to black')
+    else checkpoint('Transition duration', 'transition:duration')
+    setTransition(next)
   }
 
   // ---------- Keyboard shortcuts ----------
@@ -112,14 +178,15 @@ export default function App() {
   }
 
   /** Brief on-screen confirmation of what a key press did, like an NLE's HUD. */
-  const showHint = (id: ActionId) => {
+  const showHint = (id: ActionId, detail?: string) => {
     window.clearTimeout(hintTimer.current)
-    setHint((h) => ({ id, n: (h?.n ?? 0) + 1 }))
+    setHint((h) => ({ id, n: (h?.n ?? 0) + 1, detail }))
     hintTimer.current = window.setTimeout(() => setHint(null), 900)
   }
 
   const player = () => playerRef.current
-  const actions: Record<ActionId, () => void> = {
+  /** Each action may return a short detail for the on-screen hint (e.g. what was undone). */
+  const actions: Record<ActionId, () => string | void> = {
     playPause: () => player()?.togglePlay(),
     pause: () => player()?.pause(),
     playForward: () => player()?.play(),
@@ -133,14 +200,16 @@ export default function App() {
     nextEdit: () => player()?.nextEdit(),
     applyTransition: () => {
       setMode('sequence')
-      setTransition(DEFAULT_TRANSITION)
+      changeTransition(DEFAULT_TRANSITION, 'Apply transition')
     },
     previewTransition: () => (mode === 'sequence' ? player()?.previewTransition?.() : setMode('sequence')),
-    resetGrade: () => applyPreset(NEUTRAL_GRADE),
+    resetGrade: () => applyPreset(NEUTRAL_GRADE, 'Reset grade'),
     showClip: () => setMode('clip'),
     showSequence: () => setMode('sequence'),
     compareHold: () => setCompare(true),
     openShortcuts: () => setShortcutsOpen(true),
+    undo: doUndo,
+    redo: doRedo,
   }
 
   const handlers = Object.fromEntries(
@@ -148,8 +217,8 @@ export default function App() {
       a.id,
       {
         down: () => {
-          actions[a.id]()
-          if (a.id !== 'openShortcuts') showHint(a.id)
+          const detail = actions[a.id]()
+          if (a.id !== 'openShortcuts') showHint(a.id, detail || undefined)
         },
         up: a.id === 'compareHold' ? () => setCompare(false) : undefined,
       },
@@ -175,6 +244,26 @@ export default function App() {
         </div>
 
         <div className="topbar-tools">
+          <div className="history-btns">
+            <button
+              className="btn-square"
+              onClick={() => showHint('undo', doUndo())}
+              disabled={history.past.length === 0}
+              aria-label="Undo"
+              title={historyTitle('Undo', history.past.at(-1)?.label, shortcuts.bindings.undo)}
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M5.5 3.5 2.5 6.5l3 3" /><path d="M3 6.5h6.5a3.5 3.5 0 0 1 0 7H7" /></svg>
+            </button>
+            <button
+              className="btn-square"
+              onClick={() => showHint('redo', doRedo())}
+              disabled={history.future.length === 0}
+              aria-label="Redo"
+              title={historyTitle('Redo', history.future.at(-1)?.label, shortcuts.bindings.redo)}
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="m10.5 3.5 3 3-3 3" /><path d="M13 6.5H6.5a3.5 3.5 0 0 0 0 7H9" /></svg>
+            </button>
+          </div>
           <div className="segmented" role="radiogroup" aria-label="Mode">
             <button role="radio" aria-checked={mode === 'clip'} className={mode === 'clip' ? 'is-active' : ''} onClick={() => setMode('clip')}>
               Clip
@@ -215,7 +304,7 @@ export default function App() {
           >
             Hold to compare
           </button>
-          <button className="btn-ghost" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts">
+          <button className="btn-ghost shortcuts-btn" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts">
             Shortcuts <Kbd combo={shortcuts.bindings.openShortcuts} />
           </button>
         </div>
@@ -229,15 +318,18 @@ export default function App() {
           <SequenceViewer ref={playerRef} clipA={CLIPS[0]} clipB={CLIPS[1]} transition={transition} grade={grade} bypass={compare} />
         )}
         <aside className="sidebar">
-          {mode === 'sequence' && <TransitionPanel transition={transition} onChange={setTransition} />}
-          <PresetPanel grade={grade} onApply={applyPreset} />
-          <GradePanel grade={grade} onChange={updateGrade} onReset={() => applyPreset(NEUTRAL_GRADE)} />
+          {mode === 'sequence' && <TransitionPanel transition={transition} onChange={(t) => changeTransition(t)} />}
+          <PresetPanel grade={grade} onApply={(g) => applyPreset(g)} />
+          <GradePanel grade={grade} onChange={updateGrade} onReset={() => applyPreset(NEUTRAL_GRADE, 'Reset grade')} />
         </aside>
 
         {hint && (
           <div className="key-hint" key={hint.n} aria-hidden="true">
             <Kbd combo={shortcuts.bindings[hint.id]} />
-            <span>{actionLabel(hint.id)}</span>
+            <span>
+              {actionLabel(hint.id)}
+              {hint.detail && <span className="key-hint-detail"> · {hint.detail}</span>}
+            </span>
           </div>
         )}
       </main>

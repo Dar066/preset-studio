@@ -454,3 +454,27 @@ kbd {
   .layout-picker { grid-template-columns: 1fr; }
   .shortcuts-list { grid-template-columns: 1fr; }
 }
+
+/* ---------- Undo / redo ---------- */
+.history-btns { display: inline-flex; gap: 4px; }
+.btn-square {
+  display: grid; place-items: center;
+  width: 30px; height: 30px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.btn-square svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.btn-square:hover:not(:disabled) { border-color: #3c4248; }
+.btn-square:disabled { opacity: 0.35; cursor: default; }
+.btn-square:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.key-hint-detail { color: var(--text-dim); }
+
+/* ---------- Phones: let the page scroll normally instead of the panels scrolling under a pinned footer ---------- */
+@media (max-width: 760px) {
+  .app { height: auto; min-height: 100%; }
+  .workspace, .sidebar { overflow: visible; }
+  .topbar-tools .shortcuts-btn { display: none; } /* no keyboard on a phone */
+  .key-hint { position: fixed; top: 12px; }
+}
