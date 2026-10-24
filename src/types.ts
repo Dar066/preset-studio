@@ -30,6 +30,16 @@ export interface Preset {
   grade: Grade
 }
 
+export type TransitionType = 'crossfade' | 'dip'
+
+export interface Transition {
+  type: TransitionType
+  /** seconds; 0 = hard cut */
+  duration: number
+}
+
+export const DEFAULT_TRANSITION: Transition = { type: 'crossfade', duration: 1 }
+
 export interface Clip {
   id: string
   name: string

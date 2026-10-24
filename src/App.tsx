@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react'
-import { NEUTRAL_GRADE } from './types'
-import type { Clip, Grade, GradeKey } from './types'
+import { DEFAULT_TRANSITION, NEUTRAL_GRADE } from './types'
+import type { Clip, Grade, GradeKey, Transition } from './types'
 import { Viewer } from './components/Viewer'
 import { GradePanel } from './components/GradePanel'
 import { PresetPanel } from './components/PresetPanel'
+import { SequenceViewer } from './components/SequenceViewer'
+import { TransitionPanel } from './components/TransitionPanel'
 import { lerpGrade } from './lib/presets'
 
 const TWEEN_MS = 280
+
+type Mode = 'clip' | 'sequence'
 
 // Blender Foundation open movies (CC BY), self-hosted in public/clips
 const CLIPS: Clip[] = [
@@ -19,6 +23,8 @@ export default function App() {
   const [clipId, setClipId] = useState(CLIPS[0].id)
   const [grade, setGrade] = useState<Grade>(NEUTRAL_GRADE)
   const [compare, setCompare] = useState(false)
+  const [mode, setMode] = useState<Mode>('clip')
+  const [transition, setTransition] = useState<Transition>(DEFAULT_TRANSITION)
 
   const clip = clips.find((c) => c.id === clipId) ?? clips[0]
 
@@ -68,25 +74,37 @@ export default function App() {
         </div>
 
         <div className="topbar-tools">
-          <select className="select" value={clip.id} onChange={(e) => setClipId(e.target.value)} aria-label="Clip">
-            {clips.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <label className="btn-ghost file-btn">
-            Open file
-            <input
-              type="file"
-              accept="video/*"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) openLocalFile(f)
-                e.target.value = ''
-              }}
-            />
-          </label>
+          <div className="segmented" role="radiogroup" aria-label="Mode">
+            <button role="radio" aria-checked={mode === 'clip'} className={mode === 'clip' ? 'is-active' : ''} onClick={() => setMode('clip')}>
+              Clip
+            </button>
+            <button role="radio" aria-checked={mode === 'sequence'} className={mode === 'sequence' ? 'is-active' : ''} onClick={() => setMode('sequence')}>
+              Sequence
+            </button>
+          </div>
+          {mode === 'clip' && (
+            <>
+              <select className="select" value={clip.id} onChange={(e) => setClipId(e.target.value)} aria-label="Clip">
+                {clips.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <label className="btn-ghost file-btn">
+                Open file
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) openLocalFile(f)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </>
+          )}
           <button
             className={`btn-ghost${compare ? ' is-active' : ''}`}
             onPointerDown={() => setCompare(true)}
@@ -100,9 +118,14 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        {/* key = fresh player state for every clip */}
-        <Viewer key={clip.src} src={clip.src} grade={grade} bypass={compare} />
+        {mode === 'clip' ? (
+          /* key = fresh player state for every clip */
+          <Viewer key={clip.src} src={clip.src} grade={grade} bypass={compare} />
+        ) : (
+          <SequenceViewer clipA={CLIPS[0]} clipB={CLIPS[1]} transition={transition} grade={grade} bypass={compare} />
+        )}
         <aside className="sidebar">
+          {mode === 'sequence' && <TransitionPanel transition={transition} onChange={setTransition} />}
           <PresetPanel grade={grade} onApply={applyPreset} />
           <GradePanel grade={grade} onChange={updateGrade} onReset={() => applyPreset(NEUTRAL_GRADE)} />
         </aside>
